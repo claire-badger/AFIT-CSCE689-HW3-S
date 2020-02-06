@@ -9,6 +9,7 @@
 #include <vector>
 #include <algorithm>
 #include <future>
+#include <iostream>
 /**
  * The idea of segmented sieve is to divide the range [0..n-1] in different segments and compute primes in all segments one by one. This algorithm first uses Simple Sieve to find primes smaller than or equal to √(n). Below are steps used in Segmented Sieve.
 
@@ -33,37 +34,46 @@ Iterate through all primes found in step 1. For every prime, mark its multiples 
 
 void PCalc_T::markNonPrimes(){
     std::vector <std::thread> thread_list;
-
-    for (int p = 2; p < sqrt(this->size); p++)
-    {
-       if (thread_list.size() < this->thread_num){
-
-           for (int i = 0; i < (this->thread_num - thread_list.size()); i++) { //go through all open threads
-               std::function<void()> func = [this,p,i]() {thread_helper(p+i);}; //lambda to call helper function
-               thread_list.emplace_back(std::thread(func));
-           }
-       }
-        for (auto &t : thread_list)
-        {
-            if (t.joinable())
-                t.join();
+    this->at(0) = false;
+    this->at (1) = false;
+    int p = 2;
+    while (p < sqrt(this->size)) {
+        if (thread_list.size() < this->thread_num) {
+            for (int i = 0; i < (this->thread_num - thread_list.size()); i++) { //go through all open threads
+                std::function<void()> func = [this, p, i]() { thread_helper(p + i); }; //lambda to call helper function
+                thread_list.emplace_back(std::thread(func));
+                running[thread_list.back().get_id()] = (p+i);
+            }
         }
-
+        for (auto &t : thread_list) {
+            if (t.joinable()) {
+                t.join();
+                p++;
+            }
+        }
     }
 }
 
 void PCalc_T::thread_helper(int num){
-    if (this->at(num))
-    {
-        std::mutex mtx;
-       mtx.lock();
-        if (this->at(num)){
-            for (int j = pow(num,2); j < this->size; j += num){
-                this->at(j) = false;
+    int help = (running.find(std::this_thread::get_id())->second);
+    while (help < sqrt(this->size)) {
+        if (num > size)
+            return;
+            std::mutex mtx;
+            //std::cout<<"thread created for " << num << "\n";
+            if (this->at(num)) {
+                for (int j = pow(num, 2); j < this->size; j += num) {
+                    mtx.lock(); //mutex lock for shared resource
+                    this->at(j) = false;
+                    mtx.unlock();
+                }
             }
+        int max = 0;
+        for (const auto& [key, value]: running) {if (value > max) max = value;}
+        num = max + 1;
+        running[std::this_thread::get_id()] = num;
         }
-        mtx.unlock();
-    }
+    return;
 }
 
 PCalc_T::~PCalc_T() {
