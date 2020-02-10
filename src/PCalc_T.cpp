@@ -19,62 +19,83 @@ Do following for every segment [low..high]
 Create an array mark[high-low+1]. Here we need only O(x) space where x is number of elements in given range.
 Iterate through all primes found in step 1. For every prime, mark its multiples in given range [low..high].
  * */
-//std::vector<std::future<void>> futures;
- //so create four threads, right? each calling the helper to make the primes false. so as many as sqrt(size)
-/*
-       for(auto &e : futures) {
-          bool working = e.valid();
-       }*/
-/*
-               std::thread myThread([this, p, i]() {
-                   thread_helper((p+i));
-               });*/
-/*
-          futures.push_back (std::async([this,p]() {this->thread_helper(p);})); //use lambda to call the helper and store func in thread*/
 
+
+/*
+ * markNonPrimes():
+ * */
 void PCalc_T::markNonPrimes(){
     std::vector <std::thread> thread_list;
     this->at(0) = false;
     this->at (1) = false;
-    int p = 2;
-    while (p < sqrt(this->size)) {
-        if (thread_list.size() < this->thread_num) {
-            for (int i = 0; i < (this->thread_num - thread_list.size()); i++) { //go through all open threads
-                std::function<void()> func = [this, p, i]() { thread_helper(p + i); }; //lambda to call helper function
-                thread_list.emplace_back(std::thread(func));
-                running[thread_list.back().get_id()] = (p+i);
+    unsigned int p = 1;
+    while ((p+1) < sqrt(this->size)) {
+
+            for (unsigned int i = 0; i < (this->thread_num - thread_list.size()); i++) { //go through all open threads
+
+                if ((p + 1) > sqrt(this->size)) //makes sure not over the size
+                    break;
+
+                if (this->at(p+1)) { //makes sure its not a number marked non prime
+
+                    //if ((p+1) < lowestVal(running)) {
+                        p++;
+                        std::function<void()> func = [this, p]() { //lambda for thread
+                            thread_helper(p);
+                        };
+                        thread_list.emplace_back(std::thread(func));
+                        running[thread_list.back().get_id()] = (p);
+                   //} //else
+                     //  p++;
+               }
+                else
+                    p++;
             }
-        }
+
+        int i = 0;
         for (auto &t : thread_list) {
             if (t.joinable()) {
                 t.join();
-                p++;
+                thread_list.erase(thread_list.begin()+i);
             }
+            i++;
         }
+    }
+    for (auto &t : thread_list) {
+        if (t.joinable())
+            t.join();
     }
 }
 
-void PCalc_T::thread_helper(int num){
-    int help = (running.find(std::this_thread::get_id())->second);
-    while (help < sqrt(this->size)) {
-        if (num > size)
-            return;
-            std::mutex mtx;
-            //std::cout<<"thread created for " << num << "\n";
-            if (this->at(num)) {
-                for (int j = pow(num, 2); j < this->size; j += num) {
-                    mtx.lock(); //mutex lock for shared resource
-                    this->at(j) = false;
-                    mtx.unlock();
-                }
-            }
-        int max = 0;
-        for (const auto& [key, value]: running) {if (value > max) max = value;}
-        num = max + 1;
-        running[std::this_thread::get_id()] = num;
-        }
-    return;
+/*
+ * lowestVal(map)
+ * find the lowest value in the map of threads mapped to their current values
+ * */
+int PCalc_T::lowestVal (std::map <std::thread::id, unsigned int> map_comp){
+    int lowest = 1000000000;
+    for (auto [key, value]: map_comp) {
+        if (value < lowest)
+            lowest = value;
+    }
+    return lowest;
 }
+
+/*
+ * thread_helper(num):
+ * parameters: number to mark off multiples as non prime
+ * also changes the std::map keeping track of the min value of the threads
+ * */
+void PCalc_T::thread_helper(unsigned int num){
+    std::mutex mtx;
+    for (unsigned int j = pow(num, 2); j < this->size; j += num) {
+        mtx.lock();
+        running[std::this_thread::get_id()] = j;
+        mtx.unlock();
+        this->at(j) = false;
+    }
+    running.erase(std::this_thread::get_id());
+}
+
 
 PCalc_T::~PCalc_T() {
 
